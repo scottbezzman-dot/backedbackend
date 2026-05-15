@@ -11,7 +11,7 @@ const session = require('express-session');
 
 const allowedOrigins = [
   'http://localhost:3000',
-  'https://backedfrontend.vercl.app'
+  'https://backedfrontend.vercel.app'
 ];
 
 app.use(cors({
