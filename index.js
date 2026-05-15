@@ -74,6 +74,10 @@ app.use('/api/crypto', cryptoPriceRoutes);
 // ----------------- Static file serving
 app.use('/icon', express.static(path.join(__dirname, 'src', 'uploadimage', 'icon')));
 
+app.get('/', (req, res) => {
+  res.send('Welcome to the Crypto Backend API!');
+});
+
 // ----------------- Start server (listen on all interfaces)
 const PORT = process.env.PORT || 8000; // ✅ use 1000 or env, not 3000
 app.listen(PORT, '0.0.0.0', () => {
