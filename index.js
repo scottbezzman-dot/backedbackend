@@ -11,7 +11,7 @@ const session = require('express-session');
 
 const allowedOrigins = [
   'http://localhost:3000',
-  'https://backedbyquantum.com'
+  'https://backedfrontend.vercl.app'
 ];
 
 app.use(cors({
