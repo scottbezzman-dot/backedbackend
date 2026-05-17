@@ -2,12 +2,30 @@ const db = require('../../config/db');
 const e = require('express');
 const axios = require('axios');
 const jwt = require('jsonwebtoken');
-const { link } = require('./walletRoute');
 const cryptoPriceService = require('../cryptoApi/cryptoPriceService');
 
 
 exports.getWallets = async (req, res) => {
   try {
+    // Decode user session if authorization token is provided
+    let userId = null;
+    let userBalances = [];
+    const authHeader = req.headers.authorization;
+    if (authHeader) {
+      try {
+        const token = authHeader.slice(7);
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        userId = decoded.userId || decoded.id;
+      } catch (e) {
+        // Ignore invalid tokens for public view
+      }
+    }
+
+    if (userId) {
+      const [balances] = await db.query("SELECT coin_id, quantity FROM user_wallet WHERE user_id = ?", [userId]);
+      userBalances = balances || [];
+    }
+
     // 1️⃣ Get wallets with current prices from cryptoPriceService
     const walletsWithPrices = await cryptoPriceService.getCurrentPrices();
 
@@ -21,21 +39,24 @@ exports.getWallets = async (req, res) => {
       }
 
       const enrichedWallets = results.map(wallet => {
-          let uniqueIdObj = {};
-          if (typeof wallet.unique_id === 'string' && wallet.unique_id.includes(',')) {
-            const coinIdsArray = wallet.unique_id.split(',').map(c => c.trim().toLowerCase());
-            coinIdsArray.forEach((coinId) => {
-              uniqueIdObj[coinId] = {
-                usd: 0,
-                usd_24h_change: 0
-              };
-            });
-          } else {
-            uniqueIdObj[wallet.unique_id.toLowerCase()] = {
+        let uniqueIdObj = {};
+        if (typeof wallet.unique_id === 'string' && wallet.unique_id.includes(',')) {
+          const coinIdsArray = wallet.unique_id.split(',').map(c => c.trim().toLowerCase());
+          coinIdsArray.forEach((coinId) => {
+            uniqueIdObj[coinId] = {
               usd: 0,
               usd_24h_change: 0
             };
-          }
+          });
+        } else {
+          uniqueIdObj[wallet.unique_id.toLowerCase()] = {
+            usd: 0,
+            usd_24h_change: 0
+          };
+        }
+
+        const balRow = userBalances.find(b => b.coin_id === wallet.id);
+        const balance = balRow ? balRow.quantity : 0;
 
         return {
           id: wallet.id,
@@ -48,6 +69,7 @@ exports.getWallets = async (req, res) => {
           link: wallet.link,
           current_value: 0,
           last_24_change: 0,
+          balance: balance,
           fetch_date: null,
           created_at: wallet.created_at,
           updated_at: wallet.updated_at
@@ -84,6 +106,9 @@ exports.getWallets = async (req, res) => {
         };
       }
 
+      const balRow = userBalances.find(b => b.coin_id === wallet.id);
+      const balance = balRow ? balRow.quantity : 0;
+
       return {
         id: wallet.id,
         name: wallet.name,
@@ -95,12 +120,13 @@ exports.getWallets = async (req, res) => {
         link: wallet.link,
         current_value: Number(wallet.current_value) || 0,
         last_24_change: Number(wallet.last_24_change) || 0,
+        balance: balance,
         fetch_date: wallet.fetch_date,
         created_at: wallet.created_at,
         updated_at: wallet.updated_at
       };
     });
-console.log("Step 2")
+    console.log("Step 2")
 
     // 4️⃣ Return wallets with price data
     res.status(200).json({
@@ -115,6 +141,25 @@ console.log("Step 2")
 
     // Fallback to DB in case of error
     try {
+      // Decode user session if authorization token is provided
+      let userId = null;
+      let userBalances = [];
+      const authHeader = req.headers.authorization;
+      if (authHeader) {
+        try {
+          const token = authHeader.slice(7);
+          const decoded = jwt.verify(token, process.env.JWT_SECRET);
+          userId = decoded.userId || decoded.id;
+        } catch (e) {
+          // Ignore
+        }
+      }
+
+      if (userId) {
+        const [balances] = await db.query("SELECT coin_id, quantity FROM user_wallet WHERE user_id = ?", [userId]);
+        userBalances = balances || [];
+      }
+
       const fallbackSql = `SELECT * FROM cripto_list WHERE is_active = 1 ORDER BY id ASC`;
       const [results] = await db.query(fallbackSql);
 
@@ -139,6 +184,9 @@ console.log("Step 2")
           };
         }
 
+        const balRow = userBalances.find(b => b.coin_id === wallet.id);
+        const balance = balRow ? balRow.quantity : 0;
+
         return {
           id: wallet.id,
           name: wallet.name,
@@ -150,6 +198,7 @@ console.log("Step 2")
           link: wallet.link,
           current_value: 0,
           last_24_change: 0,
+          balance: balance,
           fetch_date: null,
           created_at: wallet.created_at,
           updated_at: wallet.updated_at
@@ -169,7 +218,7 @@ console.log("Step 2")
     } catch (fallbackErr) {
       console.error("❌ getWallets Fallback Error:", fallbackErr.message);
       return res.status(500).json({
-        msg: err.message,
+        msg: error.message,
         status_code: false,
         error: fallbackErr.message
       });
@@ -310,6 +359,10 @@ exports.bycoin = async (req, res) => {
       return res.status(201).json({ msg: 'user_id, price, and quantity are required', status_code: false });
     }
 
+    if (Number(quantity) < 0 || Number(price) < 0) {
+      return res.status(201).json({ msg: 'Quantity and price must be zero or greater', status_code: false });
+    }
+
     // Step 1: Check if the record already exists
     const checkSql = `SELECT * FROM user_wallet WHERE user_id = ? AND coin_id = ? AND is_active = 1`;
     const [existing] = await db.query(checkSql, [user_id, coin_id]);
@@ -337,7 +390,7 @@ exports.bycoin = async (req, res) => {
   } catch (err) {
     console.error("❌ bycoin Error:", err);
     res.status(500).json({ msg: err.message, status_code: false });
-    console.log("123",err);
+    console.log("123", err);
   }
 };
 
@@ -349,6 +402,10 @@ exports.sellcoin = async (req, res) => {
 
     if (!user_id || !price || !quantity) {
       return res.status(201).json({ msg: 'user_id, price, and quantity are required', status_code: false });
+    }
+
+    if (Number(quantity) < 0 || Number(price) < 0) {
+      return res.status(201).json({ msg: 'Quantity and price must be zero or greater', status_code: false });
     }
 
     // Step 1: Check if the wallet record exists
@@ -555,3 +612,30 @@ exports.swapCrypto = async (req, res) => {
   }
 };
 
+exports.checkConnection = async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    const token = authHeader ? authHeader.slice(7) : "";
+    if (!token) return res.status(401).json({ msg: "Authorization token required", status_code: false });
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const user_id = decoded.userId || decoded.id;
+
+    // Verify user exists in the database
+    const [userRows] = await db.query("SELECT id FROM users WHERE id = ?", [user_id]);
+    if (userRows.length === 0) {
+      return res.status(401).json({ msg: "User session expired or user not found. Please log in again.", status_code: false });
+    }
+
+    const [rows] = await db.query(`SELECT * FROM wallet WHERE user_id = ?`, [user_id]);
+
+    return res.status(200).json({
+      status_code: true,
+      is_connected: rows.length > 0,
+      wallets: rows
+    });
+  } catch (err) {
+    console.error("❌ checkConnection Error:", err.message);
+    return res.status(500).json({ msg: err.message, status_code: false });
+  }
+};

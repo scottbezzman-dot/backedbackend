@@ -5,6 +5,7 @@ const authRoutes = require('./src/authApi/authRoutes');
 const walletRoutes = require('./src/walletApi/walletRoute');
 const historyRoutes = require('./src/historyApi/historyRoutes');
 const cryptoPriceRoutes = require('./src/cryptoApi/cryptoPriceRoutes');
+const adminRoutes = require('./src/adminApi/adminRoutes');
 const path = require('path');
 const cors = require('cors');
 const session = require('express-session');
@@ -70,6 +71,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/wallet', walletRoutes);
 app.use('/api/history', historyRoutes);
 app.use('/api/crypto', cryptoPriceRoutes);
+app.use('/api/admin', adminRoutes);
 
 // ----------------- Static file serving
 app.use('/icon', express.static(path.join(__dirname, 'src', 'uploadimage', 'icon')));

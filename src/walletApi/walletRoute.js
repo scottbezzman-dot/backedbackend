@@ -16,5 +16,6 @@ router.post('/swap', walletController.swapCrypto);
 router.put('/update_wallets/:id', upload.single('icon'), walletController.updateWallet);
 
 router.delete('/delete_wallets/:id', walletController.deleteWallet);
+router.get('/check_connection', walletController.checkConnection);
 
 module.exports = router;
