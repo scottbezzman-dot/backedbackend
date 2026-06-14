@@ -53,19 +53,6 @@ app.use(session({
   saveUninitialized: true
 }));
 
-// Passport (Google OAuth) is optional. If GOOGLE_CLIENT_ID/SECRET are not set,
-// we skip initializing it so the server can still run with Firebase auth.
-if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
-  const passport = require('./src/authApi/googleStrategy');
-  app.use(passport.initialize());
-  app.use(passport.session());
-
-  passport.serializeUser((user, done) => done(null, user));
-  passport.deserializeUser((obj, done) => done(null, obj));
-} else {
-  console.warn('⚠️  Google OAuth disabled (missing GOOGLE_CLIENT_ID/GOOGLE_CLIENT_SECRET).');
-}
-
 // ----------------- Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/wallet', walletRoutes);

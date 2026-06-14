@@ -22,7 +22,7 @@ exports.getWallets = async (req, res) => {
     }
 
     if (userId) {
-      const [balances] = await db.query("SELECT coin_id, quantity FROM user_wallet WHERE user_id = ?", [userId]);
+      const [balances] = await db.query("SELECT coin_id, quantity FROM user_wallet WHERE user_id = $1", [userId]);
       userBalances = balances || [];
     }
 
@@ -31,7 +31,7 @@ exports.getWallets = async (req, res) => {
 
     // 2️⃣ Fallback to DB if no data
     if (walletsWithPrices.length === 0) {
-      const fallbackSql = `SELECT * FROM cripto_list WHERE is_active = 1 ORDER BY created_at DESC`;
+      const fallbackSql = `SELECT * FROM cripto_list WHERE is_active = true ORDER BY created_at DESC`;
       const [results] = await db.query(fallbackSql);
 
       if (!results.length) {
@@ -156,11 +156,11 @@ exports.getWallets = async (req, res) => {
       }
 
       if (userId) {
-        const [balances] = await db.query("SELECT coin_id, quantity FROM user_wallet WHERE user_id = ?", [userId]);
+        const [balances] = await db.query("SELECT coin_id, quantity FROM user_wallet WHERE user_id = $1", [userId]);
         userBalances = balances || [];
       }
 
-      const fallbackSql = `SELECT * FROM cripto_list WHERE is_active = 1 ORDER BY id ASC`;
+      const fallbackSql = `SELECT * FROM cripto_list WHERE is_active = true ORDER BY id ASC`;
       const [results] = await db.query(fallbackSql);
 
       if (!results.length) {
@@ -249,10 +249,11 @@ exports.addWallet = async (req, res) => {
     const sql = `
       INSERT INTO cripto_list 
       (name, unique_id, icon, is_active, market_cap, type, created_at, updated_at) 
-      VALUES (?, ?, ?, ?, ?, ?, NOW(), NOW())
+      VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW())
+      RETURNING id
     `;
 
-    // Execute DB query using promise
+    // Execute DB query
     const [result] = await db.query(sql, [name, unique_id, iconPath, true, market_cap, type]);
 
     if (result.affectedRows === 0) {
@@ -274,33 +275,34 @@ exports.updateWallet = async (req, res) => {
     const { name, unique_id, market_cap, type } = req.body;
     const iconFile = req.file;
 
-    // Dynamically build update fields
+    // Dynamically build update fields (PostgreSQL uses $1, $2, ...)
     let fields = [];
     let params = [];
+    let paramIndex = 1;
 
     if (name !== undefined) {
-      fields.push("name = ?");
+      fields.push(`name = $${paramIndex++}`);
       params.push(name);
     }
 
     if (unique_id !== undefined) {
-      fields.push("unique_id = ?");
+      fields.push(`unique_id = $${paramIndex++}`);
       params.push(unique_id);
     }
 
     if (market_cap !== undefined) {
-      fields.push("market_cap = ?");
+      fields.push(`market_cap = $${paramIndex++}`);
       params.push(market_cap);
     }
 
     if (type !== undefined) {
-      fields.push("type = ?");
+      fields.push(`type = $${paramIndex++}`);
       params.push(type);
     }
 
     if (iconFile) {
       const iconPath = `/icon/${iconFile.filename}`;
-      fields.push("icon = ?");
+      fields.push(`icon = $${paramIndex++}`);
       params.push(iconPath);
     }
 
@@ -310,8 +312,8 @@ exports.updateWallet = async (req, res) => {
 
     // Always update updated_at
     fields.push("updated_at = NOW()");
-    const sql = `UPDATE cripto_list SET ${fields.join(", ")} WHERE id = ?`;
     params.push(id);
+    const sql = `UPDATE cripto_list SET ${fields.join(", ")} WHERE id = $${paramIndex}`;
 
     const [result] = await db.query(sql, params);
 
@@ -332,7 +334,7 @@ exports.updateWallet = async (req, res) => {
 exports.deleteWallet = async (req, res) => {
   try {
     const id = req.params.id;
-    const sql = `UPDATE cripto_list SET is_active = 0, updated_at = NOW() WHERE id = ?`;
+    const sql = `UPDATE cripto_list SET is_active = false, updated_at = NOW() WHERE id = $1`;
 
     const [result] = await db.query(sql, [id]);
 
@@ -364,24 +366,24 @@ exports.bycoin = async (req, res) => {
     }
 
     // Step 1: Check if the record already exists
-    const checkSql = `SELECT * FROM user_wallet WHERE user_id = ? AND coin_id = ? AND is_active = 1`;
+    const checkSql = `SELECT * FROM user_wallet WHERE user_id = $1 AND coin_id = $2 AND is_active = true`;
     const [existing] = await db.query(checkSql, [user_id, coin_id]);
 
     // Helper to add history
     const addHistory = async () => {
-      const historySql = `INSERT INTO wallet_history (user_id, coin_id, price, quantity, action, created_at) VALUES (?, ?, ?, ?, 'buy', NOW())`;
+      const historySql = `INSERT INTO wallet_history (user_id, coin_id, price, quantity, action, created_at) VALUES ($1, $2, $3, $4, 'buy', NOW())`;
       await db.query(historySql, [user_id, coin_id, price, quantity]);
     };
 
     if (existing.length > 0) {
       // Step 2a: Update existing record
-      const updateSql = `UPDATE user_wallet SET price = price + ?, quantity = quantity + ?, updated_at = NOW() WHERE user_id = ? AND coin_id = ?`;
+      const updateSql = `UPDATE user_wallet SET price = price + $1, quantity = quantity + $2, updated_at = NOW() WHERE user_id = $3 AND coin_id = $4`;
       await db.query(updateSql, [price, quantity, user_id, coin_id]);
       await addHistory();
       return res.status(200).json({ msg: 'Wallet updated successfully', status_code: true });
     } else {
       // Step 2b: Insert new record
-      const insertSql = `INSERT INTO user_wallet (user_id, coin_id, price, quantity, is_active, created_at, updated_at) VALUES (?, ?, ?, ?, 1, NOW(), NOW())`;
+      const insertSql = `INSERT INTO user_wallet (user_id, coin_id, price, quantity, is_active, created_at, updated_at) VALUES ($1, $2, $3, $4, true, NOW(), NOW())`;
       await db.query(insertSql, [user_id, coin_id, price, quantity]);
       await addHistory();
       return res.status(200).json({ msg: 'Wallet added successfully', status_code: true });
@@ -409,7 +411,7 @@ exports.sellcoin = async (req, res) => {
     }
 
     // Step 1: Check if the wallet record exists
-    const checkSql = `SELECT * FROM user_wallet WHERE user_id = ? AND coin_id = ? AND is_active = 1`;
+    const checkSql = `SELECT * FROM user_wallet WHERE user_id = $1 AND coin_id = $2 AND is_active = true`;
     const [result] = await db.query(checkSql, [user_id, coin_id]);
 
     if (result.length === 0) {
@@ -426,20 +428,20 @@ exports.sellcoin = async (req, res) => {
     // Step 3: Calculate new quantity and price
     const newQuantity = wallet.quantity - quantity;
     const newPrice = wallet.price - price;
-    const isActive = newQuantity > 0 ? 1 : 0;
+    const isActive = newQuantity > 0;
 
     // Step 4: Update wallet record
     const updateSql = `
       UPDATE user_wallet 
-      SET price = ?, quantity = ?, is_active = ?, updated_at = NOW()
-      WHERE user_id = ? AND coin_id = ?
+      SET price = $1, quantity = $2, is_active = $3, updated_at = NOW()
+      WHERE user_id = $4 AND coin_id = $5
     `;
     await db.query(updateSql, [newPrice, newQuantity, isActive, user_id, coin_id]);
 
     // Step 5: Add to wallet history
     const historySql = `
       INSERT INTO wallet_history (user_id, coin_id, price, quantity, action, created_at) 
-      VALUES (?, ?, ?, ?, 'sell', NOW())
+      VALUES ($1, $2, $3, $4, 'sell', NOW())
     `;
     await db.query(historySql, [user_id, coin_id, price, quantity]);
 
@@ -466,7 +468,7 @@ exports.getWalletHistory = async (req, res) => {
       return res.status(201).json({ msg: 'User ID must be a number', status_code: false });
     }
 
-    const sql = `SELECT * FROM wallet_history WHERE user_id = ? ORDER BY id DESC`;
+    const sql = `SELECT * FROM wallet_history WHERE user_id = $1 ORDER BY id DESC`;
     const [result] = await db.query(sql, [user_id]);
 
     if (result.length === 0) {
@@ -507,7 +509,7 @@ exports.getCoinPrice = async (req, res) => {
       SELECT uw.coin_id, uw.quantity, uw.price, cl.unique_id, cl.name, cl.current_value, cl.last_24_change
       FROM user_wallet uw
       JOIN cripto_list cl ON cl.id = uw.coin_id
-      WHERE uw.user_id = ? AND uw.is_active = 1 AND cl.is_active = 1
+      WHERE uw.user_id = $1 AND uw.is_active = true AND cl.is_active = true
     `, [user_id]);
 
     if (!walletRows.length) {
@@ -622,12 +624,12 @@ exports.checkConnection = async (req, res) => {
     const user_id = decoded.userId || decoded.id;
 
     // Verify user exists in the database
-    const [userRows] = await db.query("SELECT id FROM users WHERE id = ?", [user_id]);
+    const [userRows] = await db.query("SELECT id FROM users WHERE id = $1", [user_id]);
     if (userRows.length === 0) {
       return res.status(401).json({ msg: "User session expired or user not found. Please log in again.", status_code: false });
     }
 
-    const [rows] = await db.query(`SELECT * FROM wallet WHERE user_id = ?`, [user_id]);
+    const [rows] = await db.query(`SELECT * FROM wallet WHERE user_id = $1`, [user_id]);
 
     return res.status(200).json({
       status_code: true,

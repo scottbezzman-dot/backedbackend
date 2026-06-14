@@ -27,7 +27,7 @@ exports.register = async (req, res) => {
     const checkSql = `
       SELECT id, username, email, phone, country_code 
       FROM users 
-      WHERE username = ? OR email = ? OR (phone = ? AND country_code = ?)
+      WHERE username = $1 OR email = $2 OR (phone = $3 AND country_code = $4)
     `;
     const [rows] = await db.query(checkSql, [username, email, phone, country_code]);
 
@@ -48,7 +48,8 @@ exports.register = async (req, res) => {
     // 🚀 Insert new user
     const insertSql = `
       INSERT INTO users (username, name, email, password, phone, country_code, is_email_verified, is_phone_verified, isActive, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, false, false, true, NOW(), NOW())
+      VALUES ($1, $2, $3, $4, $5, $6, false, false, true, NOW(), NOW())
+      RETURNING id
     `;
     const [result] = await db.query(insertSql, [
       username,
@@ -100,18 +101,15 @@ exports.register = async (req, res) => {
   }
 };
 
-
-
 exports.getuser = async (req, res) => {
   try {
-
     const authHeader = req.headers.authorization;
     const token = authHeader ? authHeader.slice(7) : "";
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     const id = decoded.userId;
 
-    const sql = `SELECT * FROM users WHERE id = ?`;
+    const sql = `SELECT * FROM users WHERE id = $1`;
     const [rows] = await db.query(sql, [id]);
 
     if (rows.length === 0) {
@@ -146,7 +144,7 @@ exports.verifyEmail = async (req, res) => {
     const id = decoded.id;
 
     // Step 1: Check if user exists
-    const [rows] = await db.query(`SELECT * FROM users WHERE id = ?`, [id]);
+    const [rows] = await db.query(`SELECT * FROM users WHERE id = $1`, [id]);
     if (rows.length === 0) {
       return res.status(201).json({ msg: 'User not found', status_code: false });
     }
@@ -155,7 +153,7 @@ exports.verifyEmail = async (req, res) => {
 
     // Step 2: Update verification flags
     const [updateResult] = await db.query(
-      `UPDATE users SET is_email_verified = true, is_phone_verified = true, updated_at = NOW() WHERE id = ?`,
+      `UPDATE users SET is_email_verified = true, is_phone_verified = true, updated_at = NOW() WHERE id = $1`,
       [id]
     );
 
@@ -197,7 +195,6 @@ exports.verifyEmail = async (req, res) => {
   }
 };
 
-
 exports.setNewPasscode = async (req, res) => {
   try {
     const { passcode } = req.body;
@@ -226,7 +223,7 @@ exports.setNewPasscode = async (req, res) => {
     const id = decoded.id;
 
     // Step 1: Check if user exists
-    const [rows] = await db.query(`SELECT * FROM users WHERE id = ?`, [id]);
+    const [rows] = await db.query(`SELECT * FROM users WHERE id = $1`, [id]);
     if (rows.length === 0) {
       return res.status(201).json({ msg: 'User not found', status_code: false });
     }
@@ -236,7 +233,7 @@ exports.setNewPasscode = async (req, res) => {
 
     // Step 3: Update passcode (only for active users)
     const [updateResult] = await db.query(
-      `UPDATE users SET passcode = ?, updated_at = NOW() WHERE id = ? AND isActive = true`,
+      `UPDATE users SET passcode = $1, updated_at = NOW() WHERE id = $2 AND isActive = true`,
       [hashedPasscode, id]
     );
 
@@ -252,8 +249,6 @@ exports.setNewPasscode = async (req, res) => {
   }
 };
 
-
-
 exports.loginWithPasscode = async (req, res) => {
   try {
     const { email, passcode } = req.body;
@@ -264,7 +259,7 @@ exports.loginWithPasscode = async (req, res) => {
     }
 
     // Step 1: Find active user by email
-    const [rows] = await db.query(`SELECT * FROM users WHERE email = ? AND isActive = true`, [email]);
+    const [rows] = await db.query(`SELECT * FROM users WHERE email = $1 AND isActive = true`, [email]);
 
     if (rows.length === 0) {
       return res.status(201).json({ msg: 'User not found or inactive', status_code: false });
@@ -308,7 +303,6 @@ exports.loginWithPasscode = async (req, res) => {
   }
 };
 
-
 exports.loginWithPassword = async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -319,7 +313,7 @@ exports.loginWithPassword = async (req, res) => {
     }
 
     // Step 1: Find active user by email
-    const [rows] = await db.query(`SELECT * FROM users WHERE email = ? AND isActive = true`, [email]);
+    const [rows] = await db.query(`SELECT * FROM users WHERE email = $1 AND isActive = true`, [email]);
 
     if (rows.length === 0) {
       return res.status(201).json({ msg: 'User not found or inactive', status_code: false });
@@ -362,8 +356,6 @@ exports.loginWithPassword = async (req, res) => {
   }
 };
 
-
-
 exports.forgetPassword = async (req, res) => {
   try {
     const { email } = req.body;
@@ -374,7 +366,7 @@ exports.forgetPassword = async (req, res) => {
 
     // Step 1: Check if user exists and is active
     const [rows] = await db.query(
-      `SELECT * FROM users WHERE email = ? AND isActive = true`,
+      `SELECT * FROM users WHERE email = $1 AND isActive = true`,
       [email]
     );
 
@@ -416,7 +408,6 @@ exports.forgetPassword = async (req, res) => {
   }
 };
 
-
 exports.setNewPassword = async (req, res) => {
   const { password } = req.body;
   const authHeader = req.headers.authorization;
@@ -437,23 +428,21 @@ exports.setNewPassword = async (req, res) => {
     const hashedPassword = await bcrypt.hash(password, 10);
 
     // 3. Ensure user exists & update password
-    const sql = `UPDATE users SET password = ? WHERE id = ? AND isActive = true`;
+    const sql = `UPDATE users SET password = $1 WHERE id = $2 AND isActive = true`;
 
-    db.query(sql, [hashedPassword, userId], (err, result) => {
-      if (err) {
-        console.error('❌ DB error:', err);
-        return res.status(500).json({ msg: 'Internal error', status_code: false });
-      }
+    const [result] = await db.query(sql, [hashedPassword, userId]);
 
-      if (result.affectedRows === 0) {
-        return res.status(201).json({ msg: 'User not found or inactive', status_code: false });
-      }
+    if (result.affectedRows === 0) {
+      return res.status(201).json({ msg: 'User not found or inactive', status_code: false });
+    }
 
-      return res.json({ msg: 'Password reset successfully', status_code: true });
-    });
+    return res.json({ msg: 'Password reset successfully', status_code: true });
   } catch (err) {
-    console.error('❌ Token error:', err);
-    return res.status(401).json({ msg: err.message, status_code: false });
+    console.error('❌ DB or Token error:', err);
+    if (err.name === 'JsonWebTokenError' || err.name === 'TokenExpiredError') {
+      return res.status(401).json({ msg: err.message, status_code: false });
+    }
+    return res.status(500).json({ msg: 'Internal error', status_code: false });
   }
 };
 
@@ -468,7 +457,7 @@ exports.addVerificationUsers = async (req, res) => {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     const id = decoded.userId;
 
-    const sql1 = `SELECT * FROM users WHERE id = ?`;
+    const sql1 = `SELECT * FROM users WHERE id = $1`;
     const [rows] = await db.query(sql1, [id]);
 
     if (rows.length === 0) {
@@ -487,13 +476,13 @@ exports.addVerificationUsers = async (req, res) => {
     // ✅ Store relative path for ID image
     const idImagePath = `/icon/${idImage.filename}`;
 
-    // ✅ SQL Insert query
+    // ✅ SQL Insert query (quoted camelCase columns for PostgreSQL)
     const sql = `
       INSERT INTO verification_uses 
-      (user_id,firstName, lastName, dob, country, address, idType, idImage, created_at) 
-      VALUES (?,?, ?, ?, ?, ?, ?, ?, NOW())
+      (user_id, "firstName", "lastName", dob, country, address, "idType", "idImage", created_at) 
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())
+      RETURNING id
     `;
-
 
     // ✅ Execute query
     const [result] = await db.query(sql, [
@@ -532,20 +521,17 @@ exports.getVerificationUsers = async (req, res) => {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     const id = decoded.userId;
 
-    const sqls = `SELECT * FROM users WHERE id = ?`;
+    const sqls = `SELECT * FROM users WHERE id = $1`;
     const [result] = await db.query(sqls, [id]);
 
     if (result.length === 0) {
       return res.status(201).json({ msg: 'User not found', status_code: false });
     }
-    // ✅ SQL SELECT query
-    const sql = `SELECT id, user_id, firstName, lastName, dob, country, address, idType, idImage, created_at 
+    // ✅ SQL SELECT query (quoted camelCase columns for PostgreSQL)
+    const sql = `SELECT id, user_id, "firstName", "lastName", dob, country, address, "idType", "idImage", created_at 
              FROM verification_uses 
-             WHERE user_id = ? 
+             WHERE user_id = $1 
              ORDER BY id DESC`;
-
-    // Example: userId you want to fetch
-    const userId = 123;
 
     // ✅ Execute query with parameter
     const [rows] = await db.query(sql, [id]);
@@ -568,7 +554,6 @@ exports.getVerificationUsers = async (req, res) => {
       idImage: row.idImage ? `${baseUrl}${row.idImage}` : null,
       created_at: row.created_at
     }));
-
 
     res.status(200).json({
       msg: 'Users fetched successfully',
@@ -596,7 +581,7 @@ exports.addTransactionCard = async (req, res) => {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     const id = decoded.userId;
     
-    const sql1 = `SELECT * FROM users WHERE id = ?`;
+    const sql1 = `SELECT * FROM users WHERE id = $1`;
     const [rows] = await db.query(sql1, [id]);
 
     if (rows.length === 0) {
@@ -615,11 +600,12 @@ exports.addTransactionCard = async (req, res) => {
     // ✅ Store relative path for ID image
     const transactionImgPath = `/icon/${transactionImg.filename}`;
 
-    // ✅ SQL Insert query
+    // ✅ SQL Insert query (quoted camelCase columns for PostgreSQL)
     const sql = `
         INSERT INTO transactions 
-        (user_id,depositAddress, xlmAmount, name, email, phone, transactionId, transactionImg, created_at)
-        VALUES (?,?, ?, ?, ?, ?, ?, ?, NOW())
+        (user_id, "depositAddress", "xlmAmount", name, email, phone, "transactionId", "transactionImg", created_at)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())
+        RETURNING id
       `;
       const [result] = await db.query(sql, [
         id,
@@ -658,20 +644,17 @@ exports.getTransactions = async (req, res) => {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     const id = decoded.userId;
 
-    const sqls = `SELECT * FROM users WHERE id = ?`;
+    const sqls = `SELECT * FROM users WHERE id = $1`;
     const [result] = await db.query(sqls, [id]);
 
     if (result.length === 0) {
       return res.status(201).json({ msg: 'User not found', status_code: false });
     }
-    // ✅ SQL SELECT query
-    const sql = `SELECT id, depositAddress ,xlmAmount,name,email,phone,transactionId,transactionImg, created_at 
+    // ✅ SQL SELECT query (quoted camelCase columns for PostgreSQL)
+    const sql = `SELECT id, "depositAddress", "xlmAmount", name, email, phone, "transactionId", "transactionImg", created_at 
                    FROM transactions
-                   WHERE user_id = ? 
+                   WHERE user_id = $1 
                    ORDER BY id DESC`;
-
-    // Example: userId you want to fetch
-    const userId = 123;
 
     // ✅ Execute query with parameter
     const [rows] = await db.query(sql, [id]);
@@ -694,7 +677,6 @@ exports.getTransactions = async (req, res) => {
       transactionImg:  row.transactionImg ? `${baseUrl}${row.transactionImg}` : null,
       created_at: row.created_at
     }));
-
 
     res.status(200).json({
       msg: 'Users fetched successfully',

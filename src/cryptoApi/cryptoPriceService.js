@@ -13,7 +13,7 @@ class CryptoPriceService {
     // Check if price data needs to be refreshed (older than 1 minute)
     async shouldRefreshPrice(coinId) {
         try {
-            const sql = `SELECT fetch_date FROM cripto_list WHERE id = ? AND is_active = 1`;
+            const sql = `SELECT fetch_date FROM cripto_list WHERE id = $1 AND is_active = true`;
             const [results] = await db.query(sql, [coinId]);
 
             if (results.length === 0) {
@@ -30,6 +30,7 @@ class CryptoPriceService {
             throw err;
         }
     }
+
     // Sleep function for rate limiting
     sleep(ms) {
         return new Promise(resolve => setTimeout(resolve, ms));
@@ -76,11 +77,10 @@ class CryptoPriceService {
 
                 const updateSql = `
                     UPDATE cripto_list 
-                    SET current_value = ?, last_24_change = ?, fetch_date = CURRENT_TIMESTAMP 
-                    WHERE id = ?
+                    SET current_value = $1, last_24_change = $2, fetch_date = CURRENT_TIMESTAMP 
+                    WHERE id = $3
                 `;
 
-                // Use async/await version
                 await db.query(updateSql, [currentValue, last24Change, coin.id]);
 
                 results.push({ id: coin.id, unique_id: coin.unique_id, updated: true, timestamp: new Date().toISOString() });
@@ -116,18 +116,19 @@ class CryptoPriceService {
             SELECT id, name, unique_id, current_value, last_24_change, fetch_date, 
                    icon, market_cap, type, link, created_at, updated_at
             FROM cripto_list 
-            WHERE is_active = 1
+            WHERE is_active = true
         `;
         const params = [];
 
         if (coinIds?.length > 0) {
-            sql += ` AND id IN (${coinIds.map(() => '?').join(',')})`;
+            // Build $1, $2, ... placeholders dynamically for PostgreSQL
+            const placeholders = coinIds.map((_, i) => `$${i + 1}`).join(',');
+            sql += ` AND id IN (${placeholders})`;
             params.push(...coinIds);
         }
 
         sql += ` ORDER BY created_at ASC`;
 
-        // Use promise-based query
         const [results] = await db.query(sql, params);
 
         // Convert numeric fields to numbers
