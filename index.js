@@ -8,8 +8,6 @@ const cryptoPriceRoutes = require('./src/cryptoApi/cryptoPriceRoutes');
 const adminRoutes = require('./src/adminApi/adminRoutes');
 const path = require('path');
 const cors = require('cors');
-const session = require('express-session');
-
 const allowedOrigins = [
   'http://localhost:3000',
   'https://backedfrontend.vercel.app'
@@ -46,12 +44,6 @@ app.use(cors({
 
 // ----------------- Middlewares
 app.use(express.json());
-
-app.use(session({
-  secret: process.env.SESSION_SECRET,
-  resave: false,
-  saveUninitialized: true
-}));
 
 // ----------------- Routes
 app.use('/api/auth', authRoutes);
