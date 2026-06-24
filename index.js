@@ -10,6 +10,8 @@ const path = require('path');
 const cors = require('cors');
 const allowedOrigins = process.env.FRONTEND_URLS.split(",");
 
+console.log("Allowed Origins: " allowedOrigins)
+
 app.use(cors({
   origin: function (origin, callback) {
     // allow requests with no origin (like Postman, curl)
