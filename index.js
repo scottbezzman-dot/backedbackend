@@ -8,7 +8,7 @@ const cryptoPriceRoutes = require('./src/cryptoApi/cryptoPriceRoutes');
 const adminRoutes = require('./src/adminApi/adminRoutes');
 const path = require('path');
 const cors = require('cors');
-const allowedOrigins = [process.env.FRONTEND_URLS.split(",")];
+const allowedOrigins = process.env.FRONTEND_URLS.split(",");
 
 app.use(cors({
   origin: function (origin, callback) {
