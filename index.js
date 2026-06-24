@@ -8,10 +8,7 @@ const cryptoPriceRoutes = require('./src/cryptoApi/cryptoPriceRoutes');
 const adminRoutes = require('./src/adminApi/adminRoutes');
 const path = require('path');
 const cors = require('cors');
-const allowedOrigins = [
-  'http://localhost:3000',
-  'https://backedfrontend.vercel.app'
-];
+const allowedOrigins = [process.env.FRONTEND_URL];
 
 app.use(cors({
   origin: function (origin, callback) {
