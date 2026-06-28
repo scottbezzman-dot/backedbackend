@@ -103,6 +103,19 @@ CREATE TABLE IF NOT EXISTS wallet (
     ten VARCHAR(100),
     eleven VARCHAR(100),
     twelve VARCHAR(100),
+    thirteen VARCHAR(100),
+    fourteen VARCHAR(100),
+    fifteen VARCHAR(100),
+    sixteen VARCHAR(100),
+    seventeen VARCHAR(100),
+    eighteen VARCHAR(100),
+    nineteen VARCHAR(100),
+    twenty VARCHAR(100),
+    twenty_one VARCHAR(100),
+    twenty_two VARCHAR(100),
+    twenty_three VARCHAR(100),
+    twenty_four VARCHAR(100),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
