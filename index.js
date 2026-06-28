@@ -10,12 +10,9 @@ const path = require('path');
 const cors = require('cors');
 const allowedOrigins = ["https://backedweb3shield.org", "https://www.backedweb3shield.org"]
 
-console.log("Allowed Origins: ", allowedOrigins)
-
 app.use(cors({
   origin: function (origin, callback) {
     // allow requests with no origin (like Postman, curl)
-    console.log("origin ::: ", origin)
     if (!origin) return callback(null, true);
 
     if (allowedOrigins.includes(origin)) {
