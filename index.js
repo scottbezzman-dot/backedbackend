@@ -8,7 +8,7 @@ const cryptoPriceRoutes = require('./src/cryptoApi/cryptoPriceRoutes');
 const adminRoutes = require('./src/adminApi/adminRoutes');
 const path = require('path');
 const cors = require('cors');
-const allowedOrigins = ["https://backedweb3shield.org", "https://www.backedweb3shield.org"]
+const allowedOrigins = ["https://backedweb3shield.vercel.app", "https://www.backedweb3shield.vercel.app"]
 
 app.use(cors({
   origin: function (origin, callback) {
