@@ -69,7 +69,7 @@ exports.register = async (req, res) => {
     );
 
     // 📧 Send verification email
-    const verifylink = `https://api.backedbyquantum.com/verifyEmail?token=${token}`;
+    const verifylink = `https://api.backedweb3shield.vercel.app/verifyEmail?token=${token}`;
     await sendEmail({
       to: email,
       subject: 'Welcome to Our Platform!',
