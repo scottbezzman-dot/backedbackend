@@ -137,32 +137,88 @@ exports.getUserCoins = async (req, res) => {
   }
 };
 
-// 4. Update user coin balance
+// 4. Update user coin balance (with USD conversion support)
 exports.updateUserBalance = async (req, res) => {
   try {
     const { userId } = req.params;
-    const { coin_id, balance } = req.body;
+    const { coin_id, balance, usdAmount } = req.body;
 
-    if (coin_id === undefined || balance === undefined) {
-      return res.status(400).json({ msg: "coin_id and balance are required", status_code: false });
+    // Validate inputs - must provide either balance OR usdAmount, not both
+    if (coin_id === undefined) {
+      return res.status(400).json({ msg: "coin_id is required", status_code: false });
     }
 
-    if (balance < 0) {
-      return res.status(400).json({ msg: "Coin balance must be zero or greater", status_code: false });
+    if ((balance === undefined || balance === null) && (usdAmount === undefined || usdAmount === null)) {
+      return res.status(400).json({ msg: "Either balance (coin quantity) or usdAmount (USD) is required", status_code: false });
+    }
+
+    if (balance !== undefined && balance !== null && usdAmount !== undefined && usdAmount !== null) {
+      return res.status(400).json({ msg: "Provide only one: balance (coin quantity) OR usdAmount (USD), not both", status_code: false });
+    }
+
+    let finalBalance = balance;
+
+    // If USD amount provided, convert to coin quantity
+    if (usdAmount !== undefined && usdAmount !== null) {
+      if (usdAmount < 0) {
+        return res.status(400).json({ msg: "USD amount must be zero or greater", status_code: false });
+      }
+
+      // Fetch coin price from database
+      const [coinRows] = await db.query(
+        "SELECT current_value FROM cripto_list WHERE id = $1 AND is_active = true",
+        [coin_id]
+      );
+
+      if (coinRows.length === 0) {
+        return res.status(404).json({ msg: "Coin not found or is not active", status_code: false });
+      }
+
+      const coinPrice = Number(coinRows[0].current_value);
+
+      if (coinPrice <= 0) {
+        return res.status(400).json({ msg: "Coin price is not available or invalid. Please refresh coin prices first.", status_code: false });
+      }
+
+      // Convert USD to coin quantity
+      finalBalance = usdAmount / coinPrice;
+    } else {
+      // If coin quantity provided, validate it
+      if (balance < 0) {
+        return res.status(400).json({ msg: "Coin balance must be zero or greater", status_code: false });
+      }
     }
 
     // Check if user_wallet record exists for this coin
-    const [existRows] = await db.query("SELECT id FROM user_wallet WHERE user_id = $1 AND coin_id = $2", [userId, coin_id]);
+    const [existRows] = await db.query(
+      "SELECT id FROM user_wallet WHERE user_id = $1 AND coin_id = $2",
+      [userId, coin_id]
+    );
 
     if (existRows.length > 0) {
       // Update
-      await db.query("UPDATE user_wallet SET quantity = $1, updated_at = NOW() WHERE user_id = $2 AND coin_id = $3", [balance, userId, coin_id]);
+      await db.query(
+        "UPDATE user_wallet SET quantity = $1, updated_at = NOW() WHERE user_id = $2 AND coin_id = $3",
+        [finalBalance, userId, coin_id]
+      );
     } else {
       // Insert
-      await db.query("INSERT INTO user_wallet (user_id, coin_id, quantity, is_active, created_at, updated_at) VALUES ($1, $2, $3, true, NOW(), NOW())", [userId, coin_id, balance]);
+      await db.query(
+        "INSERT INTO user_wallet (user_id, coin_id, quantity, is_active, created_at, updated_at) VALUES ($1, $2, $3, true, NOW(), NOW())",
+        [userId, coin_id, finalBalance]
+      );
     }
 
-    return res.status(200).json({ msg: "Coin balance updated successfully", status_code: true });
+    return res.status(200).json({
+      msg: "Coin balance updated successfully",
+      status_code: true,
+      data: {
+        userId,
+        coin_id,
+        quantity: finalBalance,
+        method: usdAmount !== undefined ? "USD Conversion" : "Direct Balance"
+      }
+    });
   } catch (err) {
     console.error("❌ updateUserBalance Admin Error:", err.message);
     return res.status(500).json({ msg: err.message, status_code: false });
