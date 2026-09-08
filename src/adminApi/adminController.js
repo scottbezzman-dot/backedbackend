@@ -137,57 +137,43 @@ exports.getUserCoins = async (req, res) => {
   }
 };
 
-// 4. Update user coin balance (with USD conversion support)
+// 4. Update user coin balance (USD only)
 exports.updateUserBalance = async (req, res) => {
   try {
     const { userId } = req.params;
-    const { coin_id, balance, usdAmount } = req.body;
+    const { coin_id, usdAmount } = req.body;
 
-    // Validate inputs - must provide either balance OR usdAmount, not both
+    // Validate required inputs
     if (coin_id === undefined) {
       return res.status(400).json({ msg: "coin_id is required", status_code: false });
     }
 
-    if ((balance === undefined || balance === null) && (usdAmount === undefined || usdAmount === null)) {
-      return res.status(400).json({ msg: "Either balance (coin quantity) or usdAmount (USD) is required", status_code: false });
+    if (usdAmount === undefined || usdAmount === null) {
+      return res.status(400).json({ msg: "usdAmount (USD value) is required", status_code: false });
     }
 
-    if (balance !== undefined && balance !== null && usdAmount !== undefined && usdAmount !== null) {
-      return res.status(400).json({ msg: "Provide only one: balance (coin quantity) OR usdAmount (USD), not both", status_code: false });
+    if (usdAmount < 0) {
+      return res.status(400).json({ msg: "USD amount must be zero or greater", status_code: false });
     }
 
-    let finalBalance = balance;
+    // Fetch coin price from database
+    const [coinRows] = await db.query(
+      "SELECT current_value FROM cripto_list WHERE id = $1 AND is_active = true",
+      [coin_id]
+    );
 
-    // If USD amount provided, convert to coin quantity
-    if (usdAmount !== undefined && usdAmount !== null) {
-      if (usdAmount < 0) {
-        return res.status(400).json({ msg: "USD amount must be zero or greater", status_code: false });
-      }
-
-      // Fetch coin price from database
-      const [coinRows] = await db.query(
-        "SELECT current_value FROM cripto_list WHERE id = $1 AND is_active = true",
-        [coin_id]
-      );
-
-      if (coinRows.length === 0) {
-        return res.status(404).json({ msg: "Coin not found or is not active", status_code: false });
-      }
-
-      const coinPrice = Number(coinRows[0].current_value);
-
-      if (coinPrice <= 0) {
-        return res.status(400).json({ msg: "Coin price is not available or invalid. Please refresh coin prices first.", status_code: false });
-      }
-
-      // Convert USD to coin quantity
-      finalBalance = usdAmount / coinPrice;
-    } else {
-      // If coin quantity provided, validate it
-      if (balance < 0) {
-        return res.status(400).json({ msg: "Coin balance must be zero or greater", status_code: false });
-      }
+    if (coinRows.length === 0) {
+      return res.status(404).json({ msg: "Coin not found or is not active", status_code: false });
     }
+
+    const coinPrice = Number(coinRows[0].current_value);
+
+    if (coinPrice <= 0) {
+      return res.status(400).json({ msg: "Coin price is not available or invalid. Please refresh coin prices first.", status_code: false });
+    }
+
+    // Convert USD to coin quantity
+    const finalBalance = usdAmount / coinPrice;
 
     // Check if user_wallet record exists for this coin
     const [existRows] = await db.query(
@@ -216,7 +202,8 @@ exports.updateUserBalance = async (req, res) => {
         userId,
         coin_id,
         quantity: finalBalance,
-        method: usdAmount !== undefined ? "USD Conversion" : "Direct Balance"
+        usdAmount: usdAmount,
+        method: "USD Conversion"
       }
     });
   } catch (err) {
